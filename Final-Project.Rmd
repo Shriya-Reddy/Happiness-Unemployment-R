@@ -1,0 +1,525 @@
+---
+title: "Final project"
+output: html_document
+date: "2022-12-11"
+---
+
+```{r}
+cb_palette = c("#999999", "#E69F00", "#56B4E9", "#009E73",
+               "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+```
+
+```{r}
+packages = c('tidyverse', 
+'ggplot2', 
+'dplyr', 
+'tidyr',
+'plotly',
+'RColorBrewer'
+)
+for (p in packages){
+  library(p,character.only = T)
+}
+```
+
+
+```{r}
+df_happiness = read.csv('World_Happiness_index(2005 - 2021).csv', header = TRUE)
+df_unemployment = read.csv('Unemployment_Rate.csv', header = TRUE)
+df_continents = read.table("continents.txt",sep = '', header = TRUE)
+```
+
+Filtering the dataset
+```{r}
+df_happiness = df_happiness %>%
+  filter(year >= 2010)
+
+df_unemployment = df_unemployment %>%
+  filter(Year >= 2010)
+
+
+```
+
+```{r}
+df_unemployment = df_unemployment %>%
+  rename(year = Year,
+         Country = Entity,
+         Unemployment_Rate = Unemployment..total....of.total.labor.force...modeled.ILO.estimate.,
+         
+         )
+
+df_happiness = df_happiness %>%
+  rename(
+         Country = Country.name,
+         GDP_percapita = Log.GDP.per.capita,
+         Life_expextancy = Healthy.life.expectancy.at.birth,
+         Corruption_rate = Perceptions.of.corruption
+         )
+
+df_continents = df_continents %>%
+  rename(Country =  name)
+
+```
+
+
+```{r}
+Final_df = merge(df_happiness,df_unemployment[,c("Country", "year", "Unemployment_Rate")],
+                   by=c("Country", "year"))
+```
+
+```{r}
+Final_df = merge(Final_df, df_continents[,c("Country", "continent")], by = c("Country"))
+```
+
+
+```{r}
+Final_df = Final_df[,c("Country", "continent", "year", "Life.Ladder", "GDP_percapita", "Life_expextancy", "Unemployment_Rate")]
+
+Final_df = na.omit(Final_df)
+```
+
+```{r}
+length(unique(Final_df$Country))
+```
+
+## Map of average Happiness Index
+```{r}
+final_mean=
+ Final_df %>%
+  merge(df_continents[,c("Country", "continent")], by = c("Country")) %>%
+  group_by(Country) %>%
+  
+  summarise(mean_happiness = mean(Life.Ladder), mean_unemployment = mean(Unemployment_Rate), mean_gdp=mean(GDP_percapita),mean_life= mean(Life_expextancy))
+```
+
+
+```{r}
+library(rworldmap)
+
+ddf <- subset(final_mean[c("Country","mean_happiness")])
+class(ddf)
+```
+
+```{r}
+sPDF <- joinCountryData2Map( ddf
+,joinCode = "NAME"
+,nameJoinColumn = "Country")
+```
+
+```{r}
+library(RColorBrewer)
+colours=brewer.pal(4,"Spectral")
+mapCountryData(sPDF, nameColumnToPlot="mean_happiness", catMethod="fixedWidth",colourPalette = colours)
+```
+
+```{r}
+v_color <- viridis::viridis(
+  n = nrow(Final_df)
+)
+
+Final_df$color <- v_color[Matrix::invPerm(
+  p = order(
+    x = Final_df$Life.Ladder
+  )
+)]
+```
+
+
+##Correlation of Happiness score and three dependent variables. 
+```{r}
+pairs(
+  formula = Life.Ladder ~ GDP_percapita + Life_expextancy +
+    Unemployment_Rate,
+  data = Final_df,
+  col = Final_df$color
+,pch = 19
+)
+```
+
+
+
+
+```{r}
+final_mean_df= Final_df %>%
+  group_by(Country) %>%
+  summarise(mean_happiness = mean(Life.Ladder), mean_unemployment = mean(Unemployment_Rate), mean_gdp=mean(GDP_percapita),mean_life= mean(Life_expextancy))%>%
+   merge(df_continents[,c("Country", "continent")], by = c("Country"))
+
+```
+
+```{r}
+final_mean_df=as.data.frame(final_mean_df)
+```
+
+```{r}
+ggplot(final_mean_df , aes(x = continent, y = mean_happiness)) +
+  geom_boxplot(aes(fill=continent)) + theme_bw() +
+  theme(axis.text.x = element_text (angle = 90))+theme_dark()  +
+  labs(y = "Average Happiness Score",
+       x = "Continents",
+       title = "Happiness with continents")
+```
+
+
+
+
+```{r}
+final_mean2=
+ Final_df %>%
+  group_by(Country) %>%
+  filter(year < 2019) %>%
+
+  summarise(mean_happiness = mean(Life.Ladder), mean_unemployment = mean(Unemployment_Rate), mean_gdp=mean(GDP_percapita),mean_life= mean(Life_expextancy))
+
+```
+
+```{r}
+final_mean3=merge(final_mean2,df_continents, by="Country") 
+```
+
+```{r}
+df <-final_mean3[order(final_mean3$mean_happiness),]
+```
+
+```{r}
+final_mean3.top10 = tail(df,10)
+```
+
+```{r}
+ggplot(final_mean3.top10, aes(x = reorder(Country,-mean_happiness), y = mean_happiness,fill=continent)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 45))+geom_col(colour = "black") + coord_cartesian(ylim=c(4,8))+scale_fill_manual(values = c("Asia"="#999999", "Europe"="#009E73", "Oceania"="#E69F00", "Americas"="#0072B2")) + labs(y = "Happiness Index",
+       x = "Country",
+       title = "Top 10 Happiest countries before COVID")
+```
+
+```{r}
+final_mean4=
+ Final_df %>%
+  group_by(Country) %>%
+  filter(year > 2019) %>%
+
+  summarise(mean_happiness = mean(Life.Ladder), mean_unemployment = mean(Unemployment_Rate), mean_gdp=mean(GDP_percapita),mean_life= mean(Life_expextancy))
+
+```
+
+```{r}
+final_mean5=merge(final_mean4,df_continents, by="Country") 
+```
+
+```{r}
+df2 <-final_mean5[order(final_mean5$mean_happiness),]
+```
+
+```{r}
+final_mean5.top10 = tail(df2,10)
+```
+
+```{r}
+ggplot(final_mean5.top10, aes(x = reorder(Country,-mean_happiness), y = mean_happiness,fill=continent)) + geom_bar(stat="identity")+ theme(axis.text.x = element_text(angle = 45))+geom_col(colour = "black")+coord_cartesian(ylim=c(4,8))+scale_fill_manual(values = c("Asia"="#999999", "Europe"="#009E73", "Oceania"="#E69F00", "Americas"="#0072B2"))+ labs(y = "Happiness Index",
+       x = "Country",
+       title = "Top 10 Happiest countries during COVID")
+```
+
+## Relationship among Unemployment Rate, GDP to Happiness Index
+
+```{r}
+Final_df %>%
+  group_by(Country) %>%
+  filter(year < 2019) %>%
+  summarise(mean_happiness = mean(Life.Ladder), mean_unemployment = mean(Unemployment_Rate), mean_gdp=mean(GDP_percapita),mean_life= mean(Life_expextancy))%>%
+   merge(df_continents[,c("Country", "continent")], by = c("Country")) %>%
+  ggplot(aes(x=mean_unemployment,y=mean_happiness,size=mean_gdp,col=continent))+geom_jitter(alpha=0.6)+ scale_color_manual(values = cb_palette)+geom_smooth(method="lm", span =0.8,se=FALSE) +
+  labs(y = "Happiness Index",
+       x = "Unemployment Rate",
+       title = "Happines vs Unemployment with GDP as third variable")
+```
+
+
+## Time plot of average Happiness for each year
+
+```{r}
+Final_df$yearfactor = factor(Final_df$year)
+Final_df %>%
+  group_by(yearfactor) %>%
+  summarise(mean_happiness = mean(Life.Ladder)) %>%
+  ggplot(aes(x=yearfactor, y = mean_happiness))  + geom_point() + geom_line(aes(group=1)) 
+```
+## Time plot of how the Happiness varies over the years for each continent
+
+```{r}
+Final_df %>%
+  group_by(continent, year) %>%
+  summarise(mean_happiness = mean(Life.Ladder)) %>%
+  ggplot(aes(x=year, y = mean_happiness, color = continent))  + geom_point() + geom_line() + scale_color_manual(values = cb_palette)+labs(y = "Average Happiness Index", x = "Year",
+       title = "Chnage of Happiness over the years")
+```
+
+
+## Individual relationship of each independent variable with dependent variable
+
+## Happiness Index vs Unemployment Rate
+```{r}
+Final_df %>%
+  #summarise(mean_happiness = mean(Life.Ladder), mean_unemployment = mean(Unemployment_Rate)) %>%
+  ggplot(aes(x = Unemployment_Rate, y = Life.Ladder)) + geom_point() + geom_smooth(method = 'lm') + labs(y = "Average Happiness Index", x = "Avg Unemployment rate",
+       title = "Avg Happiness index against Unemployment Rate")
+```
+
+## Happiness Index vs Life expectancy
+
+```{r}
+Final_df %>%
+  #summarise(mean_happiness = mean(Life.Ladder), mean_unemployment = mean(Unemployment_Rate)) %>%
+  ggplot(aes(x = Life_expextancy, y = Life.Ladder)) + geom_point() + geom_smooth(method = 'lm') + labs(y = "Average Happiness Index", x = "Avg Life expectaancy",
+       title = "Avg Happiness index against Avg Life expectancy")
+```
+## Happiness Index vs GDP percapita
+
+```{r}
+Final_df %>%
+  #summarise(mean_happiness = mean(Life.Ladder), mean_unemployment = mean(Unemployment_Rate)) %>%
+  ggplot(aes(x = GDP_percapita, y = Life.Ladder)) + geom_point() + geom_smooth(method = 'lm') + labs(y = "Average Happiness Index", x = "Avg GDP percapita",
+       title = "Avg Happiness index against Avg GDP percapita")
+```
+
+
+## Splitting data to before covid and during covid
+
+```{r}
+Final_df_2010_2018 = filter(Final_df, year <= '2018')
+Final_df_2018_2021 = filter(Final_df, year > '2018')
+```
+
+## Trend of the Unemployment rate on Happiness Index grouped by continents
+```{r}
+Final_df %>%
+  group_by(continent, Country) %>%
+  #filter(continent != 'Ocenia') %>%
+  summarise(mean_happiness = mean(Life.Ladder), mean_unemployment = mean(Unemployment_Rate)) %>%
+  ggplot(aes(x = mean_unemployment, y = mean_happiness, color = continent)) + geom_point() + geom_smooth(method = 'lm', se = FALSE) + scale_color_manual(values = cb_palette) + labs(y = "Average Happiness Index", x = "Average Unemployment Rate",
+       title = "Average Happiness index against Unemployment Rate grouped by Continents")
+```
+## Trend of the Life expectancy on Happiness Index grouped by continents
+
+```{r}
+Final_df %>%
+  group_by(continent, Country) %>%
+  summarise(mean_happiness = mean(Life.Ladder), mean_lifeexpectancy = mean(Life_expextancy)) %>%
+  ggplot(aes(x = mean_lifeexpectancy, y = mean_happiness, color = continent)) + geom_point() + geom_smooth(method = 'lm', se = FALSE) +  scale_color_manual(values = cb_palette) + labs(y = "Average Happiness Index", x = "Average Life expectancy",
+       title = "Average Happiness index against Average Life expectancy grouped by Continents")
+```
+## Trend of the GDP percapita on Happiness Index grouped by continents
+
+```{r}
+Final_df %>%
+  group_by(continent, Country) %>%
+  summarise(mean_happiness = mean(Life.Ladder), mean_gdppercapita = mean(GDP_percapita)) %>%
+  ggplot(aes(x = mean_gdppercapita, y = mean_happiness, color = continent)) + geom_point() + geom_smooth(method = 'lm', se = FALSE) + scale_color_manual(values = cb_palette)+ labs(y = "Happiness Index", x = "GDP percapita",
+       title = "Happines vs GDP")
+```
+
+
+```{r}
+lm(Life.Ladder ~ Unemployment_Rate, data  = Final_df_2010_2018)
+lm(Life.Ladder ~ Unemployment_Rate, data  = Final_df_2018_2021)
+```
+
+```{r}
+lm(Life.Ladder ~ Life_expextancy, data  = Final_df_2010_2018)
+lm(Life.Ladder ~ Life_expextancy, data  = Final_df_2018_2021)
+```
+
+
+```{r}
+lm(Life.Ladder ~ GDP_percapita, data  = Final_df_2010_2018)
+lm(Life.Ladder ~ GDP_percapita, data  = Final_df_2018_2021)
+```
+
+
+## Difference in trend of unemployment rate over Happiness Index before and during covid
+```{r}
+temp = Final_df_2010_2018%>%
+  group_by(Country) %>%
+summarise(mean_happiness = mean(Life.Ladder), mean_unemployment = mean(Unemployment_Rate)) %>%
+  mutate(group.year = "2010-2018") 
+
+temp_1 = Final_df_2018_2021%>%
+  group_by(Country) %>%
+summarise(mean_happiness = mean(Life.Ladder), mean_unemployment = mean(Unemployment_Rate)) %>%
+  mutate(group.year = "2019-2021")
+
+full_temp = union_all(temp, temp_1)
+
+ggplot(full_temp, aes(x = mean_unemployment, y = mean_happiness, color = group.year)) + geom_point()  + geom_smooth(method="lm", span =0.8, se = FALSE) + scale_color_manual(values = cb_palette) + labs(y = "Average Happiness Index", x = "Average Unemployment Rate",
+       title = "Avg Happiness index against Avg Unemployment Rate before and during covid")
+```
+
+
+## Difference in trend of Life expectancy over Happiness Index before and during covid
+
+```{r}
+temp = Final_df_2010_2018 %>%
+  group_by(Country) %>%
+summarise(mean_happiness = mean(Life.Ladder), mean_lifeexpectancy = mean(Life_expextancy)) %>%
+  mutate(group.year = "2010-2018") 
+
+temp_1 = Final_df_2018_2021 %>%
+  group_by(Country) %>%
+summarise(mean_happiness = mean(Life.Ladder), mean_lifeexpectancy = mean(Life_expextancy)) %>%
+  mutate(group.year = "2019-2021")
+
+
+full_temp = union_all(temp, temp_1)
+
+ggplot(full_temp, aes(x = mean_lifeexpectancy, y = mean_happiness, color = group.year)) + geom_point()  + geom_smooth(method="lm", span =0.8, se = FALSE) + scale_color_manual(values = cb_palette) + labs(y = "Average Happiness Index", x = "Average Life expectancy",
+       title = "Avg Happiness index against Avg Life expectancy before and during covid")
+```
+
+
+
+## Difference in trend of GDP percapita over Happiness Index before and during covid
+```{r}
+temp = Final_df_2010_2018 %>%
+  group_by(Country) %>%
+summarise(mean_happiness = mean(Life.Ladder), mean_gdppercapita = mean(GDP_percapita)) %>%
+  mutate(group.year = "2010-2018")
+
+temp_1 = Final_df_2018_2021 %>%
+  group_by(Country) %>%
+summarise(mean_happiness = mean(Life.Ladder), mean_gdppercapita = mean(GDP_percapita)) %>%
+  mutate(group.year = "2019-2021") 
+
+full_temp = union_all(temp, temp_1)
+
+ggplot(full_temp, aes(x = mean_gdppercapita, y = mean_happiness, color = group.year)) + geom_point()  + geom_smooth(method="lm", span =0.8, se = FALSE) + scale_color_manual(values = cb_palette) + labs(y = "Average Happiness Index", x = "Average GDP percapita", title = "Avg Happiness index against Avg GDP percapita before and during covid")
+
+```
+## Predicting Happiness Index of Happiness Index during covid by training lm model on data during covid
+
+```{r}
+library(mgcv)
+happiness_lm = lm(Life.Ladder ~ Life_expextancy + GDP_percapita + Unemployment_Rate, data = Final_df_2010_2018, familiy = 'symmetric')
+plot(happiness_lm)
+```
+
+
+```{r}
+happiness_grid = Final_df_2018_2021[,c("Life_expextancy", "GDP_percapita", "Unemployment_Rate")]
+happiness.predict = predict(happiness_lm, newdata = happiness_grid)
+```
+
+```{r}
+Final_df_2018_2021$predicted.happiness_lm = happiness.predict
+```
+
+```{r}
+Final_df_2018_2021 %>%
+  group_by(Country) %>%
+  summarise(mean_happiness.predicted = mean(predicted.happiness_lm), mean_happiness.original = mean(Life.Ladder)) %>%
+  merge(df_continents, by = c("Country")) %>%
+  ggplot( aes(x =  mean_happiness.predicted, y = mean_happiness.original, color = continent)) + geom_point()  + geom_abline(slope = 1, intercept = 0) +geom_smooth(method="lm", span =0.8, se = FALSE)   + scale_color_manual(values = cb_palette)+labs(x = "Predicted Happiness score",
+       y = "Actual Happiness Score",
+       title = "Prediction of Happiness (lm model)")
+
+```
+
+## Mean squared error for lm model
+
+```{r}
+mean((Final_df_2018_2021$Life.Ladder - Final_df_2018_2021$predicted.happiness_lm)^2)
+```
+
+
+## Predicting Happiness Index of Happiness Index during covid by training gam model on data during covid
+```{r}
+happy_gam = gam(Life.Ladder ~s(Life_expextancy) + s(GDP_percapita) + s(Unemployment_Rate), data = Final_df_2010_2018)
+```
+
+```{r}
+grid_gam = Final_df_2018_2021[,c("Life_expextancy", "GDP_percapita", "Unemployment_Rate")]
+gam.predict = predict(happy_gam, newdata = grid_gam)
+```
+
+```{r}
+Final_df_2018_2021$predicted.happy_gam = gam.predict
+```
+
+```{r}
+Final_df_2018_2021 %>%
+  group_by(Country) %>%
+  summarise(mean_happiness.predicted = mean(predicted.happy_gam), mean_happiness.original = mean(Life.Ladder) ) %>%
+  merge(df_continents, by = c("Country")) %>%
+  ggplot( aes(x =  mean_happiness.predicted, y = mean_happiness.original, color = continent)) + geom_point()  + geom_abline(slope = 1, intercept = 0) +  geom_smooth(method = 'lm',se=FALSE)   + scale_color_manual(values = cb_palette)+labs(x = "Predicted Happiness Score ",
+       y = "Actual Happiness Score",
+       title = "Prediction of Happiness (GAM model)")
+```
+## Mean squared error for lm model
+```{r}
+mean((Final_df_2018_2021$Life.Ladder - Final_df_2018_2021$predicted.happy_gam)^2)
+```
+
+
+## Forecasting the avergae happiness index of the world during covid (2019-2021) using holt predictions 
+```{r}
+timeseries_df = Final_df %>%
+  group_by(year) %>%
+  summarise(mean_happiness = mean(Life.Ladder)) %>%
+  filter(year < 2019)
+```
+
+```{r}
+timeseries_object = ts(timeseries_df[,2], start = (2010), end = (2018), frequency = 1)
+timeseries_object
+```
+
+```{r}
+library(forecast)
+library(fpp2)
+library(TTR)
+library(dplyr)
+holt_pred = holt(timeseries_object, h = 3)
+summary(holt_pred)
+```
+```{r}
+holt_pred_df = as.data.frame(holt_pred)
+```
+
+```{r}
+year = c(2019, 2020, 2021)
+mean_happiness = holt_pred_df$`Point Forecast`
+timeseries_df1 = data.frame(year, mean_happiness)
+```
+
+
+```{r}
+timeseries_df = union_all(timeseries_df, timeseries_df1)
+```
+
+```{r}
+timeseries_df  = timeseries_df  %>%
+  rename(happiness.forecasted = mean_happiness)
+```
+
+```{r}
+tempdf = Final_df %>%
+  group_by(year) %>%
+  summarise(mean_happiness = mean(Life.Ladder))
+timeseries_df$original.happiness = tempdf$mean_happiness
+
+```
+
+```{r}
+timeseries_df = timeseries_df %>%
+  pivot_longer(cols = c(happiness.forecasted, original.happiness),
+               names_to = 'happiness.type',
+               values_to = 'happinness.value')
+```
+
+
+
+```{r}
+ggplot(timeseries_df, aes(x = year, y = happinness.value , color = happiness.type)) + geom_point() + geom_line() + scale_color_manual(values = cb_palette) + labs(x = "Year",
+       y = "Happiness Index",
+       title = "Holts forecasting")
+```
+
+
